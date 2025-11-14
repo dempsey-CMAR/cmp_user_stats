@@ -1,0 +1,169 @@
+---
+title: "CMAR Coastal Monitoring Program Highlights"
+format: 
+  dashboard:
+    orientation: columns
+    theme: custom.scss
+server: shiny
+---
+
+```{r}
+#| context: setup
+#| include: false
+
+library(bsicons)
+library(bslib)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(plotly)
+library(RColorBrewer)
+library(shiny)
+library(stringr)
+library(tidyr)
+
+theme_set(theme_light())
+
+dat_all <- readRDS(here("data/historical_access.RDS"))
+
+pal <- c("#063E4D", "#62AECA")
+
+```
+
+# Filters {.sidebar width=15% height=100%}
+
+```{r}
+w <- '95%'
+
+selectInput(
+  "data_branch", "Select Data Branch", 
+  choices = unique(dat_all$program_branch),
+  selected = "Water Quality"
+)
+
+selectInput(
+  "user_segment", "Select User", 
+  choices = unique(dat_all$user_segment),
+  selected = "anonymous"
+)
+
+selectInput(
+  "access_type", "Select Access", 
+  choices = unique(dat_all$access_type),
+  selected = "download"
+)
+
+selectInput(
+  "data_product", "Select Data Product", 
+  choices = unique(dat_all$data_product),
+  selected = "dataset"
+)
+
+```
+
+# Interactions
+
+## 
+```{r}
+plotlyOutput("fig1")
+```
+
+##
+
+### {height=70%}
+```{r}
+plotlyOutput("fig2")
+```
+
+###
+
+::: {.card padding=0px}
+```{r}
+bslib::value_box(
+  title = "Total Number of Views:",
+  showcase = bs_icon("eye"),
+  value = "Test for Now",
+  theme = value_box_theme(bg = "#62AECA", fg = "#063E4D")
+)
+```
+:::
+
+
+```{r}
+#| context: server
+
+dat <- reactive({
+  dat <- dat_all %>% 
+    filter(
+      program_branch == input$data_branch,
+      user_segment == input$user_segment,
+      access_type == input$access_type,
+      data_product == input$data_product
+    ) 
+
+  return(dat)
+})
+
+output$fig1 <- renderPlotly({
+  
+  plot_title <- paste0(
+    "Total Number of ",
+    input$data_branch, " ",
+    input$data_product, "\n", 
+    input$access_type, "s by ",
+    input$user_segment, " users"
+  )
+  
+  dat_plot <- dat() %>% 
+    group_by(asset_name) %>% 
+    summarise(n = sum(value)) %>% 
+    ungroup()
+  
+  p <- ggplot(dat_plot, aes(n, asset_name)) +
+    geom_col(position = "dodge", col = "grey20", fill = pal[1]) +
+    scale_y_discrete(limits = rev) +
+    scale_x_continuous("Total Number", expand = expansion(mult = c(0, 0.1))) +
+    labs(title = plot_title) +
+    theme(
+      plot.title = element_text(hjust = 0),
+      panel.grid.major.y = element_blank(),
+      axis.title.y = element_blank()
+    )
+  ggplotly(p)
+})
+
+
+output$fig2 <- renderPlotly({
+  plot_title <- paste0(
+    "Cumulative number of ",
+    input$data_branch, " ",
+    input$data_product, "\n", 
+    input$access_type, "s by ",
+    input$user_segment, " users"
+  )
+  
+  
+  dat_plot <- dat() %>%
+    arrange(timestamp_ns) %>% 
+    group_by(asset_name) %>%
+    mutate(n = cumsum(value)) %>% 
+    ungroup()
+  
+  get_pal <- colorRampPalette(c("#063E4D", "#62AECA", "#FFD118"))
+  pal <- get_pal(length(unique(dat_plot$asset_name)))
+  
+  p <- ggplot(
+    dat_plot, aes(timestamp_ns, n, col = asset_name, group = asset_name)
+  ) +
+    geom_line(linewidth = 1) +
+    scale_y_continuous("Cumulative Number") +
+    scale_colour_manual("Asset", values = pal) +
+    labs(title = plot_title) +
+    theme(
+      axis.title.x = element_blank()
+    )
+  
+  ggplotly(p)
+})
+
+```

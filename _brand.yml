@@ -1,0 +1,22 @@
+color:
+  palette:
+    white: "#FFFFFF"
+    dark-blue: "#003c4c"
+    light-blue: "#00a4e4"
+    grey: "#849ca4"
+  foreground: dark-blue
+  background: white
+  primary: dark-blue
+
+typography:
+  base: 
+    family: Ebrima
+    size: "1em"
+  headings: 
+    family: Ebrima
+    color: white
+  monospace: Fira Code
+  link:
+    color: light-blue
+  
+  
