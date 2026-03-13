@@ -13,6 +13,7 @@ server: shiny
 
 library(bsicons)
 library(bslib)
+library(data.table)
 library(dplyr)
 library(ggplot2)
 library(here)
@@ -28,7 +29,9 @@ source(here("functions/preprocess_user_stats.R"))
 
 theme_set(theme_light())
 
-#dat_all <- readRDS(here("data/historical_access.RDS")) 
+# dd_opts <- fread("data/2026-03-13_user_stats.csv", data.table = FALSE) %>% 
+#   preprocess_user_stats() %>% 
+#   distinct(program_branch, access_type, data_product)
 
 pal <- c("#063E4D", "#62AECA")
 
@@ -36,10 +39,9 @@ pal <- c("#063E4D", "#62AECA")
 
 # Filters {.sidebar width=15% height=100%}
 
-**Download User Statistics**
+**Import User Statistics**
 
-The User Statistics must be loaded at the beginning of each session. This may take
-30 - 60 seconds.
+The User Statistics must be loaded at the beginning of each session. Last updated: March 13, 2026.
 
 ```{r}
 w <- '95%'
@@ -51,26 +53,13 @@ actionButton("button", "Load Data", width = w, class = "btn-primary btn-lg")
 **Select Statistics**
 
 ```{r}
-selectInput(
-  "data_branch", "Select Data Branch", 
-  #choices = unique(dat_all$program_branch),
-  choices = c("Current", "Water Quality", "Wave"),
-  selected = "Water Quality"
-)
 
-selectInput(
-  "data_product", "Select Data Product", 
-  # choices = unique(dat_all$data_product),
-  choices = c("chart", "dataset", "map"),
-  selected = "dataset"
-)
+uiOutput("branch_dropdown")
 
-selectInput(
-  "access_type", "Select Access", 
-  #choices = unique(dat_all$access_type),
-  choices = c("API read", "download", "view"),
-  selected = "download"
-)
+uiOutput("data_product_dropdown")
+
+uiOutput("access_type_dropdown")
+
 ```
 
 # Dashboard
@@ -107,64 +96,153 @@ dat_all <- eventReactive(input$button, {
     message = 'Loading data', 
     detail = 'This may take a moment...', {
       
-      odp_api_config <- config::get(config = "default", file = "odp_api/config.yml")
+      # odp_api_config <- config::get(config = "default", file = "odp_api/config.yml")
+      # 
+      # url <- "https://data.novascotia.ca/api/v3/views/ktyz-sxuu/"
+      # 
+      # dat_all <- read.socrata(
+      #   url,
+      #   app_token = odp_api_config$app_token,
+      #   email = odp_api_config$email,
+      #   password = odp_api_config$password
+      # ) %>%
+      #   preprocess_user_stats()
       
-      wq_metrics_url <- "https://data.novascotia.ca/api/v3/views/ktyz-sxuu/"
-      adcp_metrics_url <- "https://data.novascotia.ca/api/v3/views/dv55-4vcp/"
-      
-      wq_metrics <- read.socrata(
-        wq_metrics_url,
-        app_token = odp_api_config$app_token,
-        email = odp_api_config$email,
-        password = odp_api_config$password
-      )
-      
-      incProgress(1/2, detail = "halfway there")
-      
-      adcp_metrics <- read.socrata(
-        adcp_metrics_url,
-        app_token = odp_api_config$app_token,
-        email = odp_api_config$email,
-        password = odp_api_config$password
-      )
-      
-      dat_all <- bind_rows(wq_metrics, adcp_metrics) %>%
+      dat_all <- fread("data/2026-03-13_user_stats.csv", data.table = FALSE) %>%
         preprocess_user_stats()
-      
     })
   
   return(dat_all)
-  
 })
 
+# dat_branch <- reactive({
+#   req(input$data_branch)
+#   
+#   dat <- dat_all() %>% 
+#     filter(program_branch == input$data_branch) 
+#   
+#   return(dat)
+# })
+# 
+# dat_product <- reactive({
+#   req(input$data_product)
+#   
+#   dat <- dat_branch() %>% 
+#     filter(data_product == input$data_product) 
+# 
+#   return(dat)
+# })
+# 
+# 
+# dat_access <- reactive({
+#   req(input$access_type)
+#   
+#   dat <- dat_product() %>% 
+#     filter(access_type == input$access_type) 
+# 
+#   return(dat)
+# })
 
 dat <- reactive({
   req(dat_all())
-  
-  dat <- dat_all() %>% 
+  req(input$data_branch)
+  req(input$data_product)
+  req(input$access_type)
+
+  dat <- dat_all() %>%
     filter(
       program_branch == input$data_branch,
-      access_type == input$access_type,
-      data_product == input$data_product
-    ) 
+      data_product == input$data_product,
+      access_type == input$access_type
+    )
 
   return(dat)
 })
 
+########################################################
+#### UI ################################################
+########################################################
+
+output$branch_dropdown <- renderUI({
+  selectInput(
+    "data_branch", "Select Data Branch", 
+    choices = c("Current", "Inland", "Story", "Water Quality", "Wave"),
+    selected = "Water Quality"
+  )
+})
+
+# product dropdown
+output$data_product_dropdown <- renderUI({
+  selectInput(
+    "data_product", "Select Data Product",
+    #  choices = NULL, selected = NULL
+    choices = c("chart", "dataset", "map", "story"),
+    selected = "dataset"
+  )
+})
+
+# update data product dropdown
+# observeEvent(input$data_branch, {
+#   selected <- input$data_product
+#   
+#   choices <- dd_opts %>% 
+#     filter(
+#       program_branch == isolate(input$data_branch)
+#     ) %>% 
+#     distinct(data_product) %>% 
+#     pull(data_product)
+#   
+#   updateSelectInput(
+#     inputId = "data_product",
+#     choices = sort(choices),
+#     selected = selected
+#   )
+# })
+
+# access type dropdown
+output$access_type_dropdown <- renderUI({
+  selectInput(
+    "access_type", "Select Access",
+    # choices = NULL, selected = NULL
+    choices = c("API read", "download", "view"),
+    selected = "download"
+  )
+})
+
+# update access type dropdown
+# observeEvent(input$data_product, {
+#   selected <- input$data_access
+#   
+#   choices <- dd_opts %>%
+#     filter(
+#       program_branch == isolate(input$data_branch),
+#       data_product == isolate(input$data_product)
+#     ) %>%
+#     distinct(access_type) %>%
+#     pull(access_type)
+#   
+#   updateSelectInput(
+#     inputId = "access_type",
+#     choices = sort(choices),
+#     selected = selected
+#   )
+# })
+
+
 output$fig1 <- renderPlotly({
-  
+
   plot_title <- paste0(
     "Number of ",
     input$data_branch, " ",
-    input$data_product, "\n", 
+    input$data_product, "\n",
     input$access_type, "s"
   )
-  
-  dat_plot <- dat() %>% 
-    group_by(asset_name) %>% 
-    summarise(n = sum(value)) %>% 
+
+  dat_plot <- dat() %>%
+    group_by(asset_name) %>%
+    summarise(n = sum(value)) %>%
     ungroup()
-  
+
   p <- ggplot(dat_plot, aes(n, asset_name)) +
     geom_col(position = "dodge", col = "grey20", fill = pal[1]) +
     scale_y_discrete(limits = rev) +
@@ -175,8 +253,8 @@ output$fig1 <- renderPlotly({
       panel.grid.major.y = element_blank(),
       axis.title.y = element_blank()
     )
-  
-  ggplotly(p) %>% 
+
+  ggplotly(p) %>%
     config(
       modeBarButtonsToRemove = list("toggleSpikelines", "autoScale2d"),
       displaylogo = FALSE,
@@ -184,9 +262,9 @@ output$fig1 <- renderPlotly({
         format = "png",
         filename = paste(
           "total",
-          input$data_branch, 
-          input$data_product, 
-          input$access_type,  
+          input$data_branch,
+          input$data_product,
+          input$access_type,
           sep = "_"),
         width = 600, height = 800
       ))
@@ -200,18 +278,18 @@ output$fig2 <- renderPlotly({
     input$data_product, " ",
     input$access_type, "s"
   )
-  
+
   dat_plot <- dat() %>%
-    arrange(timestamp) %>% 
+    arrange(timestamp) %>%
     group_by(asset_name) %>%
-    mutate(n = cumsum(value)) %>% 
+    mutate(n = cumsum(value)) %>%
     ungroup()
-  
+
   get_pal <- colorRampPalette(c("#063E4D", "#62AECA", "#FFD118"))
   pal <- get_pal(length(unique(dat_plot$asset_name)))
-  
+
   p <- ggplot(
-    dat_plot, 
+    dat_plot,
     aes(timestamp, n, col = asset_name, group = asset_name,
         text = paste(
           "asset_name: ", asset_name, "\n",
@@ -224,8 +302,8 @@ output$fig2 <- renderPlotly({
     scale_colour_manual("Asset", values = pal) +
     labs(title = plot_title) +
     theme(axis.title.x = element_blank())
-  
-  ggplotly(p, tooltip = "text") %>% 
+
+  ggplotly(p, tooltip = "text") %>%
     config(
       modeBarButtonsToRemove = list("toggleSpikelines", "autoScale2d"),
       displaylogo = FALSE,
@@ -233,9 +311,9 @@ output$fig2 <- renderPlotly({
         format = "png",
         filename = paste(
           "cumulative",
-          input$data_branch, 
-          input$data_product, 
-          input$access_type,  
+          input$data_branch,
+          input$data_product,
+          input$access_type,
           sep = "_"),
         width = 1200, height = 600
       ))
@@ -248,17 +326,17 @@ box_title <- reactive({
   box_title <- paste0(
     "Total ",
     input$data_branch, " ",
-    input$data_product, "\n", 
+    input$data_product, "\n",
     input$access_type, "s"
   )
-  
+
   return(box_title)
 })
 
 box_value <- reactive({
-  
-  n <- dat() %>% 
-    summarise(n = sum(value)) %>% 
+
+  n <- dat() %>%
+    summarise(n = sum(value)) %>%
     pull(n)
 
   n <- format(n, big.mark = ",")
@@ -266,25 +344,25 @@ box_value <- reactive({
 })
 
 box_icon <- reactive({
-  
+
   if(grepl("view", input$access_type)) {
     box_icon <- "eye"
   } else if(grepl("download", input$access_type)) {
     box_icon <- "box-arrow-down"
   } else box_icon <- "book"
-  
+
   return(box_icon)
 })
 
 output$value_box_total <- renderUI({
-  
+
   bslib::value_box(
     title = box_title(),
     showcase = bs_icon(box_icon()),
     value = box_value(),
     theme = value_box_theme(bg = "#62AECA", fg = "#063E4D")
   )
-  
+
 })
 
 ```

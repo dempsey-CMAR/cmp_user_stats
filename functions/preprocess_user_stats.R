@@ -11,7 +11,8 @@ preprocess_user_stats <- function(dat) {
     "Station Locations", "Station Location", "Deployment Information",
     "Annapolis", "Antigonish", "Cape Breton", "Colchester", "Digby",
     "Guysborough", "Halifax", "Inverness", "Lunenburg", "Pictou", "Queens",
-    "Richmond", "Shelburne", "Victoria","Yarmouth"
+    "Richmond", "Shelburne", "Victoria","Yarmouth", "Inland",
+    "Understanding Complex Data"
   )
 
   old_datasets <- c(
@@ -19,26 +20,36 @@ preprocess_user_stats <- function(dat) {
     "Nova Scotia Current Speed and Direction Data"
   )
 
-  access_views <- c("grid view", "primer page view", "visualization canvas view")
+  access_views <- c(
+    "grid view", "primer page view", "visualization canvas view", "story view"
+  )
 
   dat %>%
     filter(
       user_segment == "anonymous",
-      !(asset_name %in% old_datasets)
+      !(asset_name %in% old_datasets),
+      asset_type != "filter" # this is mainly the User Stats dataset
     ) %>%
     mutate(
+      asset_name = if_else(str_detect(asset_name, "Inland"), "Inland", asset_name),
+
       program_branch = case_when(
-        str_detect(asset_name, "Water Quality") ~ "Water Quality",
+        str_detect(asset_name, "Water Quality Data") ~ "Water Quality",
         # old Water Quality dataset names
         str_detect(asset_name, "Coastal Monitoring Program") ~ "Water Quality",
         str_detect(asset_name, "Current") ~ "Current",
         str_detect(asset_name, "Wave") ~ "Wave",
         str_detect(asset_name, "Current and Wave") ~ "Current and Wave",
+
+        str_detect(asset_name, "Inland") ~ "Inland",
+        str_detect(asset_name, "Understanding Complex Data") ~ "Story",
         TRUE ~ NA
       ),
       asset_name = str_extract(asset_name, paste(assets, collapse = "|")),
-      asset_name = if_else(
-        asset_name == "Station Location", "Station Locations", asset_name
+      asset_name = case_when(
+        asset_name == "Station Location" ~ "Station Locations",
+        asset_name == "Understanding Complex Data" ~ "Article",
+        TRUE ~ asset_name
       ),
 
       access_type = case_when(
