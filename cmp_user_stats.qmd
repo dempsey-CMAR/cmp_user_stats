@@ -33,7 +33,7 @@ pal <- c("#063E4D", "#62AECA")
 
 # # temporary fix: downloaded data from api and save as csv file
 # odp_api_config <- config::get(config = "default", file = "odp_api/config.yml")
-# 
+
 # url <- "https://data.novascotia.ca/api/v3/views/ktyz-sxuu/"
 # 
 # dat_all <- read.socrata(
